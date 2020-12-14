@@ -1,0 +1,81 @@
+---
+title: "DFCI"
+author: "Kathleen Weimer"
+date: "11/17/2020"
+output: html_document
+---
+
+### Load Libraries
+```{r}
+library(devtools)
+library(rgdal)
+library(plyr)
+library(stringr)
+library(ggplot2)
+library(spdep)
+library(broom)
+library(lubridate)
+library(dplyr)
+library(data.table)
+library(ggrepel)
+library(tidyverse)
+library(ggmap)
+library(devtools)
+library(readr)
+library(grid)
+library(extrafont)
+library(foreign)
+library(sf)
+library(RColorBrewer)
+library(raster)
+library(rgeos)
+```
+
+```{r}
+
+danafarber=read.csv("Boston_2010/DFCI.csv")
+massroad2010=readOGR("Boston_2010/EOTMAJROADS_RTE_MAJOR.shp")
+
+masspop2010=read.dbf("Boston_2010/CEN2010_CT_SF1_POP_RACE.dbf")
+masspop2010=masspop2010[,c("POP_2010","POP_WHITE", "GEOID10")]
+
+
+massmap2010=readOGR("Boston_2010/tabblock2010_25_pophu.shp")
+mass=massmap2010@data
+
+
+mass = mass %>% unite("GEOID10", STATEFP10:TRACTCE10, remove = FALSE)
+mass$GEOID10 = gsub("_","" , mass$GEOID10 ,ignore.case = TRUE)
+
+
+mass=merge(mass, masspop2010, by = "GEOID10")
+mass$Percent_white=mass$POP_WHITE/mass$POP_2010
+mass$Percent_white=mass$Percent_white*100
+mass=mass[,c("BLOCKID10","GEOID10","POP_2010","POP_WHITE", "Percent_white")]
+
+massmap2010=merge(massmap2010, mass, by = "BLOCKID10")
+
+massmap2010=massmap2010[which(massmap2010$COUNTYFP10== c("009", "017", "021", "025", "027")),]
+massmap2010=massmap2010[which(massmap2010$POP_2010> 0),]
+
+```
+```{r}
+
+#massmap2010 = gUnaryUnion(massmap2010, id = massmap2010@data$TRACTCE10)
+
+df <- danafarber[,c("Long","Lat")]
+dfci <- SpatialPointsDataFrame(coords = df, data = danafarber,
+                               proj4string = CRS("+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"))
+
+massroad2010 <- spTransform(massroad2010,CRS("+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"))
+
+Roads <- list("sp.lines", massroad2010, col = "goldenrod2", lwd = 1)
+Locations <- list("sp.lines", dfci, col = "red3", lwd = 3, labels=dfci@data$Name)
+my.palette <- rev(brewer.pal(n = 5, name = "PuBu"))
+
+jpeg("Dana_Farber.jpeg", units="in", width=5, height=5, res=300)
+spplot(massmap2010, "Percent_white", col.regions = my.palette, cuts = 4, sp.layout = list(Roads, Locations), col = "transparent")
+dev.off()
+
+```
+
